@@ -1,0 +1,30 @@
+# Marques à protéger. "keywords" = mots à repérer dans les noms de domaine.
+brands:
+  - name: Wave
+    category: mobile_money
+    keywords: [wave]
+    official_domains: [wave.com]
+  - name: Orange Money
+    category: mobile_money
+    keywords: [orangemoney, orange-money, om]
+    official_domains: [orange.sn, orangemoney.orange.sn]
+  - name: Sonatel
+    category: telecom
+    keywords: [sonatel]
+    official_domains: [sonatel.com, sonatel.sn]
+  - name: CBAO
+    category: bank
+    keywords: [cbao]
+    official_domains: []
+  - name: Ecobank
+    category: bank
+    keywords: [ecobank]
+    official_domains: [ecobank.com]
+  - name: Senelec
+    category: public_service
+    keywords: [senelec]
+    official_domains: []
+  - name: Impots Senegal
+    category: public_service
+    keywords: [impots, senetax, dgid]
+    official_domains: [impotsetdomaines.gouv.sn]
