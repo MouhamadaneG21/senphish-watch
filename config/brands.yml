@@ -6,7 +6,7 @@ brands:
     official_domains: [wave.com]
   - name: Orange Money
     category: mobile_money
-    keywords: [orangemoney, orange-money, om]
+    keywords: [orangemoney, orange-money]
     official_domains: [orange.sn, orangemoney.orange.sn]
   - name: Sonatel
     category: telecom
