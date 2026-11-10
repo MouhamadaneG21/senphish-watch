@@ -1,0 +1,19 @@
+version: "3.8"
+services:
+  certstream:
+    image: 0rickyy0/certstream-server-go:latest
+    container_name: certstream
+    restart: unless-stopped
+    volumes:
+      - ./certstream/config.yaml:/app/config.yaml:ro
+  monitor:
+    build:
+      context: ..
+    container_name: senphish-monitor
+    restart: unless-stopped
+    depends_on:
+      - certstream
+    environment:
+      CERTSTREAM_URL: ws://certstream:8080/domains-only
+    volumes:
+      - ../data:/app/data
