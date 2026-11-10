@@ -92,7 +92,7 @@ class Enricher:
                 created, registrar = parse_rdap(self._fetch(base + "domain/" + registered))
                 result = {"rdap": "ok", "created": created, "registrar": registrar}
         except Exception:  # reseau, JSON invalide, limite de debit : on continue sans age
-            pass
+            return result  # echec temporaire : on ne le met pas en cache
         if len(self._rdap_cache) >= CACHE_MAX:
             self._rdap_cache.clear()
         self._rdap_cache[registered] = result

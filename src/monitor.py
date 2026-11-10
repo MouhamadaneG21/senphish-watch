@@ -105,7 +105,9 @@ async def run():
         backoff = 1
         while True:
             try:
-                async with websockets.connect(URL) as ws:
+                async with websockets.connect(
+                        URL, open_timeout=30, ping_interval=30,
+                        ping_timeout=90, max_queue=4096) as ws:
                     log.info("connecte a %s", URL)
                     backoff = 1
                     async for message in ws:
@@ -114,7 +116,7 @@ async def run():
             except (OSError, websockets.exceptions.WebSocketException) as exc:
                 log.warning("connexion perdue (%s), nouvel essai dans %ds", exc, backoff)
                 await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, 60)
+                backoff = min(backoff * 2, 15)
 
 
 if __name__ == "__main__":

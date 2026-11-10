@@ -59,3 +59,17 @@ def test_enrich_survives_network_failure():
     info = Enricher(fetch=boom, resolver=lambda d: []).enrich("wave-pay.com")
     assert info["rdap"] == "unavailable"
     assert info["age_days"] is None and info["resolves"] is False
+
+
+def test_temporary_failure_is_not_cached():
+    state = {"fail": True}
+
+    def flaky(url):
+        if state["fail"]:
+            raise OSError("limite de debit")
+        return BOOTSTRAP if url.endswith("dns.json") else RDAP
+
+    e = Enricher(fetch=flaky, resolver=lambda d: [])
+    assert e.enrich("wave-pay.com")["rdap"] == "unavailable"
+    state["fail"] = False
+    assert e.enrich("wave-pay.com")["rdap"] == "ok"  # nouvel essai reussi

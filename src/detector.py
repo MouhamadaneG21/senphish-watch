@@ -89,28 +89,61 @@ def _tokens(text: str) -> List[str]:
     return [t for t in re.split(r"[^a-z0-9]+", text) if t]
 
 
-def _match_view(text: str, keywords: List[str]) -> Tuple[Set[str], str]:
+_NEEDS_FOLD = re.compile(r"[013457$]|rn|vv|[^\x00-\x7f]")
+
+
+class _View:
+    """Un texte analyse une seule fois (jetons, texte compact), partage par toutes les marques."""
+
+    __slots__ = ("text", "token_set", "haystack", "_tokens", "_token_chars")
+
+    def __init__(self, text: str):
+        self.text = text
+        self._tokens = _tokens(text)
+        self.token_set = set(self._tokens)
+        self.haystack = text.replace(".", "").replace("-", "")
+        self._token_chars = None
+
+    def token_chars(self):
+        if self._token_chars is None:
+            self._token_chars = [(t, set(t)) for t in self._tokens]
+        return self._token_chars
+
+
+def _compile_keywords(keywords: List[str]):
+    """Precalcule, pour chaque mot-cle, ce dont les comparaisons ont besoin."""
+    out = []
+    for kw in keywords:
+        kw = kw.lower()
+        flat = kw.replace("-", "")
+        long_enough = len(flat) >= 5
+        out.append((kw, flat, long_enough, set(flat) if long_enough else None,
+                    1 if len(flat) < 8 else 2))
+    return out
+
+
+def _match_view(view: _View, kws) -> Tuple[Set[str], str]:
     """Cherche les mots-cles d'une marque dans un texte. Retourne (signaux, mot trouve)."""
-    tokens = _tokens(text)
-    haystack = text.replace(".", "").replace("-", "")
     signals: Set[str] = set()
     matched = ""
-    for kw in keywords:
-        kw_flat = kw.replace("-", "")
-        if kw in tokens:
+    for kw, flat, long_enough, chars, max_dist in kws:
+        if kw in view.token_set:
             signals.add("exact_token")
             matched = matched or kw
-        elif len(kw_flat) >= 5 and kw_flat in haystack:
+        elif long_enough and flat in view.haystack:
             signals.add("contains")
             matched = matched or kw
-        elif len(kw_flat) >= 5:
-            max_dist = 1 if len(kw_flat) < 8 else 2
-            for tok in tokens:
-                if tok != kw_flat and abs(len(tok) - len(kw_flat)) <= 2:
-                    if levenshtein(tok, kw_flat) <= max_dist:
-                        signals.add("fuzzy")
-                        matched = matched or tok
-                        break
+        elif long_enough:
+            # Filtre rapide : si moins de (len - max_dist) lettres distinctes du mot-cle
+            # sont presentes dans le jeton, la distance d'edition depasse forcement max_dist.
+            need = len(chars) - max_dist
+            for tok, tok_chars in view.token_chars():
+                if (tok != flat and abs(len(tok) - len(flat)) <= 2
+                        and len(tok_chars & chars) >= need
+                        and levenshtein(tok, flat) <= max_dist):
+                    signals.add("fuzzy")
+                    matched = matched or tok
+                    break
     return signals, matched
 
 
@@ -127,6 +160,10 @@ def _find_lures(text: str) -> List[str]:
 class BrandDetector:
     def __init__(self, brands: List[Dict]):
         self.brands = brands
+        self._compiled = [
+            (b, b.get("official_domains", []), _compile_keywords(b["keywords"]))
+            for b in brands
+        ]
 
     @classmethod
     def from_file(cls, path) -> "BrandDetector":
@@ -142,20 +179,22 @@ class BrandDetector:
         text = ".".join(p for p in (ext.subdomain, ext.domain) if p)
         decoded = _decode_idna(text)
 
+        plain = _View(decoded)
+        folded_views = None  # calcule au plus une fois par domaine, et seulement si utile
         results: List[Detection] = []
-        for brand in self.brands:
-            if is_official(domain, brand.get("official_domains", [])):
+        for brand, officials, kws in self._compiled:
+            if is_official(domain, officials):
                 continue
-            keywords = [k.lower() for k in brand["keywords"]]
 
-            signals, matched = _match_view(decoded, keywords)
-            if not signals:
-                # Domaine "deguise" : on teste les versions depliees (0->o, vv->w, 1->l ou i...)
-                for one_as in ("l", "i"):
-                    folded = _fold(decoded, one_as)
-                    if folded == decoded:
-                        continue
-                    folded_signals, folded_matched = _match_view(folded, keywords)
+            signals, matched = _match_view(plain, kws)
+            if not signals and _NEEDS_FOLD.search(decoded):
+                if folded_views is None:
+                    folded_views = [
+                        _View(f) for f in (_fold(decoded, "l"), _fold(decoded, "i"))
+                        if f != decoded
+                    ]
+                for view in folded_views:
+                    folded_signals, folded_matched = _match_view(view, kws)
                     if folded_signals:
                         signals = {"idn_homoglyph" if text != decoded else "homoglyph"}
                         matched = folded_matched
